@@ -51,13 +51,14 @@
         isInit: false,
         timer: null,
         io: null,
-        loading: false
+        loading: false,
+        isFeatureSupported:false
       }
     },
 
     created () {
-      // 如果指定timeout则无论可见与否都是在timeout之后初始化
-      if (this.timeout) {
+      this.browserFeatureDetection();
+      if (this.isFeatureSupported && this.timeout) {
         this.timer = setTimeout(() => {
           this.init()
         }, this.timeout)
@@ -65,8 +66,8 @@
     },
 
     mounted () {
-      if (!this.timeout) {
-        // 根据滚动方向来构造视口外边距，用于提前加载
+      this.browserFeatureDetection();
+      if (this.isFeatureSupported && !this.timeout) {
         let rootMargin
         switch (this.direction) {
           case 'vertical':
@@ -77,7 +78,6 @@
             break
         }
 
-        // 观察视口与组件容器的交叉情况
         this.io = new window.IntersectionObserver(this.intersectionHandler, {
           rootMargin,
           root: this.viewport,
@@ -88,13 +88,25 @@
     },
 
     beforeDestroy () {
-      // 在组件销毁前取消观察
-      if (this.io) {
+      if (this.isFeatureSupported && this.io) {
         this.io.unobserve(this.$el)
       }
     },
 
     methods: {
+      browserFeatureDetection(){
+        // Safari browser does, at time of writing 28-11-2018 not support IntersectionObserver.
+        // The fallback is that we just disable lazy loading.
+        	if (!'IntersectionObserver' in window && !'IntersectionObserverEntry' in window && !'intersectionRatio' in window.IntersectionObserverEntry.prototype) {
+              this.isFeatureSupported = false
+              // feature is not supportet so set isInit to true 
+              this.isInit = true;
+          }
+          else {
+            this.isFeatureSupported = true
+          }
+      },
+      
       // 交叉情况变化处理函数
       intersectionHandler (entries) {
         if (
@@ -108,21 +120,19 @@
         }
       },
 
-      // 处理组件和骨架组件的切换
+
       init () {
-        // 此时说明骨架组件即将被切换
-        this.$emit('beforeInit')
-        this.$emit('before-init')
+        if (isFeatureSupported){
+            this.$emit('beforeInit')
+            this.$emit('before-init')
+            this.loading = true
 
-        // 此时可以准备加载懒加载组件的资源
-        this.loading = true
-
-        // 由于函数会在主线程中执行，加载懒加载组件非常耗时，容易卡顿
-        // 所以在requestAnimationFrame回调中延后执行
-        this.requestAnimationFrame(() => {
-          this.isInit = true
-          this.$emit('init')
-        })
+            this.requestAnimationFrame(() => {
+              this.isInit = true
+              this.$emit('init')
+            })
+        }
+        
       },
 
       requestAnimationFrame (callback) {
